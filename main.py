@@ -1,35 +1,94 @@
 import telebot
-import requests
-import json
-import webbrowser
+from currency_converter import CurrencyConverter
+# import requests
+# import json
+# import webbrowser
 from telebot import types
 # import sqlite3
 
-API = '924ead372bd558bf00894360020ad829'
-
-name = None
+# API = '924ead372bd558bf00894360020ad829'
+#
+# name = None
+currency = CurrencyConverter()
+amount = 0
 
 bot = telebot.TeleBot('6578683615:AAHviIwc0llgJLFvH3j1OGSYnp29MoBKQP8')
 
-
+# Currency Converter bot
 @bot.message_handler(commands=['start'])
 def start(message):
-    bot.send_message(message.chat.id, 'Hi! Enter a city:')
+    bot.send_message(message.chat.id, 'Укажите сумму')
+    bot.register_next_step_handler(message, summa)
 
 
-@bot.message_handler(content_types=['text'])
-def get_weather(message):
-    city = message.text.strip().lower()
-    res = requests.get(f'https://api.openweathermap.org/data/2.5/weather?q={city}&appid={API}&units=metric')
-    if res.status_code == 200:
-        data = json.loads(res.text)
-        temp = data["main"]["temp"]
-        bot.reply_to(message, f'Сейчас погода: {temp} градусов Цельсия.')
-        image = 'sunny.jpeg' if temp > 5.0 else 'cloudy.jpeg'
-        file = open('./' + image, 'rb')
-        bot.send_photo(message.chat.id, file)
+def summa(message):
+    global amount
+    try:
+        amount = float(message.text.strip())
+        loop_flag = True
+    except ValueError:
+        bot.send_message(message.chat.id, 'Введён неверный формат. Впишите сумму')
+        bot.register_next_step_handler(message, summa)
+        return
+
+    if amount > 0:
+        markup = types.InlineKeyboardMarkup(row_width=2)
+        btn1 = types.InlineKeyboardButton('USD/EUR', callback_data='usd/eur')
+        btn2 = types.InlineKeyboardButton('EUR/USD', callback_data='eur/usd')
+        btn3 = types.InlineKeyboardButton('USD/GBP', callback_data='usd/gbp')
+        btn4 = types.InlineKeyboardButton('Другие валюты', callback_data='else')
+        markup.add(btn1, btn2, btn3, btn4)
+        bot.send_message(message.chat.id, 'Выберите валютную пару', reply_markup=markup)
     else:
-        bot.reply_to(message, 'Введено неверное название города.')
+        bot.send_message(message.chat.id, 'Сумма должна быть больше нуля. Впишите сумму')
+        bot.register_next_step_handler(message, summa)
+
+
+@bot.callback_query_handler(func=lambda call: True)
+def callback(call):
+    if call.data != 'else':
+        values = call.data.upper().split('/')
+        res = currency.convert(amount, values[0], values[1])
+        bot.send_message(call.message.chat.id, f'Получается {res:.2f} {values[1]}')
+        bot.register_next_step_handler(call.message, summa)
+    else:
+        bot.send_message(call.message.chat.id, 'Введите два трёхбуквенных значения валют через "/"')
+        bot.register_next_step_handler(call.message, my_currency)
+
+
+def my_currency(message):
+    try:
+        values = message.text.upper().split('/')
+        res = currency.convert(amount, values[0], values[1])
+        bot.send_message(message.chat.id, f'Получается {res:.2f} {values[1]}')
+        bot.register_next_step_handler(message, summa)
+    except Exception:
+        bot.send_message(message.chat.id, 'Что-то пошло не так. Введите значение заново.')
+        bot.register_next_step_handler(message, my_currency)
+
+
+
+
+
+
+# @bot.message_handler(commands=['start'])
+# def start(message):
+#     bot.send_message(message.chat.id, 'Hi! Enter a city:')
+#
+#
+# @bot.message_handler(content_types=['text'])
+# def get_weather(message):
+#     city = message.text.strip().lower()
+#     res = requests.get(f'https://api.openweathermap.org/data/2.5/weather?q={city}&appid={API}&units=metric')
+#     if res.status_code == 200:
+#         data = json.loads(res.text)
+#         temp = data["main"]["temp"]
+#         bot.reply_to(message, f'Сейчас погода: {temp} градусов Цельсия.')
+#         image = 'sunny.jpeg' if temp > 5.0 else 'cloudy.jpeg'
+#         file = open('./' + image, 'rb')
+#         bot.send_photo(message.chat.id, file)
+#     else:
+#         bot.reply_to(message, 'Введено неверное название города.')
 
 
 
